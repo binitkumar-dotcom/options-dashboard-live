@@ -7,24 +7,27 @@ import plotly.graph_objects as go
 import yoptions as yo
 
 # --- 1. PAGE SETUP ---
-st.set_page_config(page_title="Options Dashboard", layout="wide")
+st.set_page_config(page_title="Indian Options Dashboard", layout="wide")
 
 # --- 2. SIDEBAR INPUTS ---
 st.sidebar.header("Dashboard Settings")
 
 st.sidebar.subheader("Module 1: Market Scanner")
+# *** CHANGE: Updated default tickers to NSE stocks ***
 tickers_string = st.sidebar.text_area(
-    "Enter Tickers to Scan (comma-separated)", 
-    "AAPL, MSFT, GOOGL, AMZN, NVDA, TSLA, META"
+    "Enter Tickers (use .NS suffix, e.g., RELIANCE.NS)", 
+    "RELIANCE.NS, TCS.NS, INFY.NS, HDFCBANK.NS, ICICIBANK.NS, SBIN.NS"
 )
 ticker_list = [s.strip().upper() for s in tickers_string.split(',') if s.strip()]
 
 st.sidebar.subheader("Module 2/3/4: Deep Dive")
-deep_dive_ticker = st.sidebar.text_input("Enter a Single Ticker for Analysis", "AAPL").upper()
+# *** CHANGE: Updated default ticker to an NSE stock ***
+deep_dive_ticker = st.sidebar.text_input("Enter a Single Ticker for Analysis", "RELIANCE.NS").upper()
 
 
 # --- 3. MODULE 1: MARKET & VOLATILITY SCANNER ---
-st.title("Module 1: Market & Volatility Scanner")
+st.title("Module 1: Market & Volatility Scanner (NSE)")
+st.info("ℹ️ Remember to use the .NS suffix for all Indian stocks (e.g., INFY.NS for Infosys).")
 
 @st.cache_data(ttl=600) # Cache data for 10 minutes
 def get_scan_data(ticker_list):
@@ -53,7 +56,7 @@ def get_scan_data(ticker_list):
 
             scan_results.append({
                 'Ticker': ticker, 
-                'Price': f"${current_price:.2f}",
+                'Price': f"₹{current_price:.2f}",
                 'ATM IV %': f"{atm_iv:.1f}%", 
                 'Stock Vol. Ratio': volume_ratio
             })
@@ -82,7 +85,7 @@ else:
     try:
         stock_data = yf.download(deep_dive_ticker, period="1y", progress=False)
         current_price = stock_data['Close'].iloc[-1]
-        st.header(f"Analysis for: {deep_dive_ticker} (Current Price: ${current_price:.2f})")
+        st.header(f"Analysis for: {deep_dive_ticker} (Current Price: ₹{current_price:.2f})")
         
         # --- MODULE 2: TECHNICAL ANALYSIS ---
         st.subheader("Module 2: Underlying Stock Analysis")
@@ -163,34 +166,36 @@ else:
             suggestion = ""
             reasoning = ""
             
+            # *** CHANGE: Updated labels to be CE/PE specific ***
+            
             if current_atm_iv > 60: # High IV
                 if rsi_status.startswith("Oversold"): # High IV + Oversold
-                    suggestion = "💡 Strategy: Sell Cash-Secured Put"
-                    reasoning = f"**Why:** IV is high ({current_atm_iv:.1f}%), so option premium is rich. The stock is **Oversold**, suggesting a likely bounce. Selling a put collects this premium."
+                    suggestion = "💡 Strategy: Sell Put Option (PE)"
+                    reasoning = f"**Why:** IV is high ({current_atm_iv:.1f}%), so premium is rich. The stock is **Oversold**, suggesting a bounce. Selling a PE collects this premium (Bullish)."
                 elif rsi_status.startswith("Overbought"): # High IV + Overbought
-                    suggestion = "💡 Strategy: Sell Covered Call"
-                    reasoning = f"**Why:** IV is high ({current_atm_iv:.1f}%), so option premium is rich. The stock is **Overbought**, suggesting a pullback. Selling a call collects this premium."
+                    suggestion = "💡 Strategy: Sell Call Option (CE)"
+                    reasoning = f"**Why:** IV is high ({current_atm_iv:.1f}%), so premium is rich. The stock is **Overbought**, suggesting a pullback. Selling a CE collects this premium (Bearish)."
                 else: # High IV + Neutral
-                    suggestion = "💡 Strategy: Short Strangle / Iron Condor"
+                    suggestion = "💡 Strategy: Short Strangle (Sell OTM CE & PE)"
                     reasoning = f"**Why:** IV is very high ({current_atm_iv:.1f}%) and technicals are neutral. This suggests a 'volatility crush' is possible. This strategy profits if the stock stays in a range."
             
             elif current_atm_iv < 35: # Low IV
                 if macd_status.startswith("Bullish"): # Low IV + Bullish
-                    suggestion = "💡 Strategy: Buy Long Call"
-                    reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. MACD shows **Bullish Momentum**. A long call has high reward potential if the stock moves up."
+                    suggestion = "💡 Strategy: Buy Call Option (CE)"
+                    reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. MACD shows **Bullish Momentum**. A long CE has high reward potential if the stock moves up."
                 elif macd_status.startswith("Bearish"): # Low IV + Bearish
-                    suggestion = "💡 Strategy: Buy Long Put"
-                    reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. MACD shows **Bearish Momentum**. A long put has high reward potential if the stock moves down."
+                    suggestion = "💡 Strategy: Buy Put Option (PE)"
+                    reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. MACD shows **Bearish Momentum**. A long PE has high reward potential if the stock moves down."
                 else: # Low IV + Neutral
-                    suggestion = "💡 Strategy: Buy Straddle (Speculative)"
-                    reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. This is ideal for betting on a large move in *either* direction (e.g., an earnings surprise)."
+                    suggestion = "💡 Strategy: Long Straddle (Buy ATM CE & PE)"
+                    reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. This is ideal for betting on a large move in *either* direction (e.g., an earnings/news surprise)."
             
             else: # Moderate IV
                 if macd_status.startswith("Bullish") and rsi_status.startswith("Oversold"):
-                    suggestion = "💡 Strategy: Bull Call Spread"
+                    suggestion = "💡 Strategy: Bull Call Spread (Buy CE, Sell higher CE)"
                     reasoning = "Technicals are Bullish. A spread defines your risk and has a good risk/reward profile in moderate IV."
                 elif macd_status.startswith("Bearish") and rsi_status.startswith("Overbought"):
-                    suggestion = "💡 Strategy: Bear Put Spread"
+                    suggestion = "💡 Strategy: Bear Put Spread (Buy PE, Sell lower PE)"
                     reasoning = "Technicals are Bearish. A spread defines your risk and has a good risk/reward profile in moderate IV."
                 else:
                     suggestion = "💡 Strategy: No Clear Signal"
@@ -215,9 +220,9 @@ else:
                 # Fetch Greeks using yoptions
                 @st.cache_data(ttl=600)
                 def get_greeks(ticker, expiry):
-                    # Risk-free rate approximation
-                    calls = yo.get_chain_greeks_date(ticker, option_type='c', expiration_date=expiry, risk_free_rate=0.01)
-                    puts = yo.get_chain_greeks_date(ticker, option_type='p', expiration_date=expiry, risk_free_rate=0.01)
+                    # *** CHANGE: Risk-free rate updated to 0.07 (7%) for India ***
+                    calls = yo.get_chain_greeks_date(ticker, option_type='c', expiration_date=expiry, risk_free_rate=0.07)
+                    puts = yo.get_chain_greeks_date(ticker, option_type='p', expiration_date=expiry, risk_free_rate=0.07)
                     return calls, puts
 
                 call_chain, put_chain = get_greeks(deep_dive_ticker, selected_expiry)
@@ -226,14 +231,15 @@ else:
                 
                 # Format for display
                 for df in [call_chain, put_chain]:
-                    df['Impl. Volatility'] = (df['Impl. Volatility'] * 100).round(2).astype(str) + '%'
-                    for col in ['Delta', 'Theta', 'Vega', 'Gamma']:
-                        df[col] = df[col].round(3)
+                    if not df.empty:
+                        df['Impl. Volatility'] = (df['Impl. Volatility'] * 100).round(2).astype(str) + '%'
+                        for col in ['Delta', 'Theta', 'Vega', 'Gamma']:
+                            df[col] = df[col].round(3)
                 
-                st.subheader(f"Call Option Chain (Expiry: {selected_expiry})")
+                st.subheader(f"Call Option (CE) Chain (Expiry: {selected_expiry})")
                 st.dataframe(call_chain[display_cols], use_container_width=True)
                 
-                st.subheader(f"Put Option Chain (Expiry: {selected_expiry})")
+                st.subheader(f"Put Option (PE) Chain (Expiry: {selected_expiry})")
                 st.dataframe(put_chain[display_cols], use_container_width=True)
                 
             else:
@@ -243,4 +249,4 @@ else:
             st.error(f"Error fetching option chain Greeks: {e}")
 
     except Exception:
-        st.error(f"Could not fetch data for {deep_dive_ticker}. Please check the symbol and your internet connection.")
+        st.error(f"Could not fetch data for {deep_dive_ticker}. Please check the symbol (.NS) and your internet connection.")
