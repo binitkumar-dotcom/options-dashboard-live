@@ -84,11 +84,7 @@ else:
         else:
             st.header(f"Analysis for: {deep_dive_ticker} (Current Price: ₹{current_price:.2f})")
             
-            # --- *** THE FIX IS HERE *** ---
-            # Use .history() on the Ticker object instead of yf.download()
-            # This avoids the MultiIndex column problem.
             stock_data = stock_yft.history(period="1y", auto_adjust=True)
-            # --- *** END OF FIX *** ---
 
             if stock_data.empty:
                 st.error(f"Could not download HISTORICAL data for {deep_dive_ticker}.")
@@ -100,14 +96,22 @@ else:
                     # --- MODULE 2: TECHNICAL ANALYSIS ---
                     st.subheader("Module 2: Underlying Stock Analysis")
                     
+                    # Calculate Technical Indicators
                     stock_data.ta.rsi(append=True)
                     stock_data.ta.macd(append=True)
                     stock_data.ta.bbands(append=True)
-                    stock_data.dropna(inplace=True)
+                    stock_data.dropna(inplace=True) # Drop NaNs created by TA
                     
-                    if stock_data.empty:
-                        st.error("Not enough data to calculate technical indicators.")
+                    # --- *** THE FIX IS HERE *** ---
+                    # Check if TA columns were created. Requires at least 20 days of data.
+                    required_cols = ['BBU_20_2.0', 'BBL_20_2.0', 'RSI_14', 'MACDh_12_26_9']
+                    if not all(col in stock_data.columns for col in required_cols):
+                        st.error(f"Could not calculate technical indicators for {deep_dive_ticker}.")
+                        st.warning("This usually means there is not enough historical data (less than 20 days) for this ticker.")
+                    # --- *** END OF FIX *** ---
+                    
                     else:
+                        # This code now only runs if all TA columns exist
                         last_row = stock_data.iloc[-1]
 
                         # Plot Price & Bollinger Bands
