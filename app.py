@@ -73,8 +73,7 @@ st.title(f"Deep Dive: {deep_dive_ticker}")
 if not deep_dive_ticker:
     st.info("Enter a ticker in the sidebar (Module 2/3/4) for a deep dive.")
 else:
-    # --- *** NEW ROBUST FIX *** ---
-    # First, get the current price and info in a stable way
+    # --- Data Fetching for Deep Dive ---
     try:
         stock_yft = yf.Ticker(deep_dive_ticker)
         info = stock_yft.info
@@ -83,11 +82,14 @@ else:
         if current_price is None or current_price == 0:
             st.error(f"Could not fetch a valid CURRENT PRICE for {deep_dive_ticker}. Check symbol or yfinance status.")
         else:
-            # --- Price is valid, now we can display the header ---
             st.header(f"Analysis for: {deep_dive_ticker} (Current Price: ₹{current_price:.2f})")
             
-            # --- Now, fetch historical data for charts ---
-            stock_data = yf.download(deep_dive_ticker, period="1y", progress=False, auto_adjust=True)
+            # --- *** THE FIX IS HERE *** ---
+            # Use .history() on the Ticker object instead of yf.download()
+            # This avoids the MultiIndex column problem.
+            stock_data = stock_yft.history(period="1y", auto_adjust=True)
+            # --- *** END OF FIX *** ---
+
             if stock_data.empty:
                 st.error(f"Could not download HISTORICAL data for {deep_dive_ticker}.")
             else:
@@ -101,7 +103,7 @@ else:
                     stock_data.ta.rsi(append=True)
                     stock_data.ta.macd(append=True)
                     stock_data.ta.bbands(append=True)
-                    stock_data.dropna(inplace=True) # Run again in case TA added NaNs
+                    stock_data.dropna(inplace=True)
                     
                     if stock_data.empty:
                         st.error("Not enough data to calculate technical indicators.")
@@ -160,7 +162,7 @@ else:
                         # --- MODULE 4: STRATEGY & SUGGESTION ENGINE ---
                         st.title("Module 4: Trade Suggestion Engine")
                         try:
-                            exp_dates = stock_yft.options # Use the Ticker object we already have
+                            exp_dates = stock_yft.options
                             
                             if not exp_dates:
                                 st.error(f"No option expiration dates found for {deep_dive_ticker}. yfinance may not support options for this ticker.")
@@ -170,9 +172,8 @@ else:
                                 current_atm_iv = atm_call.get('impliedVolatility', 0) * 100
                                 st.metric("Current ATM Implied Volatility (Nearest Expiry)", f"{current_atm_iv:.1f}%")
 
-                                # --- Suggestion Logic ---
-                                suggestion = ""
-                                reasoning = ""
+                                # Suggestion Logic
+                                suggestion, reasoning = "", ""
                                 
                                 if current_atm_iv > 60:
                                     if rsi_status.startswith("Oversold"):
@@ -196,7 +197,7 @@ else:
                                         suggestion = "💡 Strategy: Long Straddle (Buy ATM CE & PE)"
                                         reasoning = f"**Why:** IV is low ({current_atm_iv:.1f}%), making options cheap. This is ideal for betting on a large move."
                                 
-                                else:
+                                else: # Moderate IV
                                     if macd_status.startswith("Bullish") and rsi_status.startswith("Oversold"):
                                         suggestion = "💡 Strategy: Bull Call Spread (Buy CE, Sell higher CE)"
                                         reasoning = "Technicals are Bullish. A spread defines your risk."
@@ -243,5 +244,5 @@ else:
                             st.error(f"Here is the exact error: {e}")
 
     except Exception as e:
-        st.error(f"A critical error occurred: {e}")
+        st.error(f"A critical error occurred while fetching initial data: {e}")
         st.error("This can happen if the ticker is invalid or yfinance is unable to retrieve initial data.")
